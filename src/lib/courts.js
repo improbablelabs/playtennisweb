@@ -1,0 +1,15 @@
+export const SANTA_CRUZ_COURTS = [
+  { name: "Jade Street Park Courts", lat: 36.969237, lng: -121.959466, totalCourts: 4, openHour: 5, closeHour: 22, maxMatchDuration: 60 },
+  { name: "Willowbrook Park Court", lat: 36.988059, lng: -121.932768, totalCourts: 1, openHour: 5, closeHour: 22, maxMatchDuration: 180 },
+  { name: "Neary Lagoon Courts", lat: 36.963044, lng: -122.033670, totalCourts: 2, openHour: 5, closeHour: 22, maxMatchDuration: 180 },
+  { name: "Sergeant Derby Park Courts", lat: 36.953982, lng: -122.050772, totalCourts: 2, openHour: 7, closeHour: 19, maxMatchDuration: 180 },
+  { name: "Santa Cruz High School Courts", lat: 36.970085, lng: -122.033218, totalCourts: 4, openHour: 7, closeHour: 19, maxMatchDuration: 180 },
+  { name: "Brommer Street County Park", lat: 36.970517, lng: -121.974207, totalCourts: 1, openHour: 8, closeHour: 19, maxMatchDuration: 180 },
+  { name: "Harbor High School Tennis Courts", lat: 36.987028, lng: -121.990367, totalCourts: 6, openHour: 8, closeHour: 19, maxMatchDuration: 180 },
+  { name: "Soquel High School Tennis Courts", lat: 36.993088, lng: -121.958414, totalCourts: 6, openHour: 8, closeHour: 19, maxMatchDuration: 180 },
+  { name: "East Tennis Courts", lat: 36.994314, lng: -122.054466, totalCourts: 6, openHour: 7, closeHour: 20, maxMatchDuration: 180 },
+  { name: "UCSC Admin Campus Courts", lat: 36.957660, lng: -122.058917, totalCourts: 2, openHour: 7, closeHour: 19, maxMatchDuration: 180 },
+  { name: "West Tennis Courts", lat: 36.992613, lng: -122.065500, totalCourts: 6, openHour: 3, closeHour: 23, maxMatchDuration: 180 },
+  { name: "Cabrillo College Tennis Courts", lat: 36.986116, lng: -121.923806, totalCourts: 8, openHour: 7, closeHour: 19, maxMatchDuration: 180 },
+  { name: "Twin Lakes County Park", lat: 36.968132, lng: -121.997550, totalCourts: 1, openHour: 8, closeHour: 20, maxMatchDuration: 180 },
+]
