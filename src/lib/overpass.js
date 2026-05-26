@@ -22,20 +22,32 @@ export async function fetchNearbyCourts(lat, lon, radiusMeters = 16000) {
     out center tags;
   `
 
-  const endpoints = [
+  // Use our serverless proxy in production to avoid CORS.
+  // Falls back to direct endpoints in local dev (where /api/overpass isn't running).
+  const directEndpoints = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
   ]
 
   let res
-  for (const url of endpoints) {
-    try {
-      console.log('[Overpass] Trying', url)
-      res = await fetch(url, { method: 'POST', body: query, signal: AbortSignal.timeout(30000) })
-      console.log('[Overpass] Response from', url, '— status:', res.status)
-      if (res.ok) break
-    } catch (err) {
-      console.warn('[Overpass] Failed:', url, err.message)
+  try {
+    console.log('[Overpass] Trying proxy /api/overpass')
+    const r = await fetch('/api/overpass', { method: 'POST', body: query, signal: AbortSignal.timeout(35000) })
+    if (r.ok) res = r
+  } catch (err) {
+    console.warn('[Overpass] Proxy failed, trying direct:', err.message)
+  }
+
+  if (!res) {
+    for (const url of directEndpoints) {
+      try {
+        console.log('[Overpass] Trying', url)
+        res = await fetch(url, { method: 'POST', body: query, signal: AbortSignal.timeout(30000) })
+        console.log('[Overpass] Response from', url, '— status:', res.status)
+        if (res.ok) break
+      } catch (err) {
+        console.warn('[Overpass] Failed:', url, err.message)
+      }
     }
   }
 
@@ -208,17 +220,24 @@ export async function searchCourtsByName(nameQuery) {
     out center tags 20;
   `
 
-  const endpoints = [
+  const directEndpoints = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
   ]
 
   let res
-  for (const url of endpoints) {
-    try {
-      res = await fetch(url, { method: 'POST', body: query, signal: AbortSignal.timeout(10000) })
-      if (res.ok) break
-    } catch { /* try next */ }
+  try {
+    const r = await fetch('/api/overpass', { method: 'POST', body: query, signal: AbortSignal.timeout(15000) })
+    if (r.ok) res = r
+  } catch { /* fall through */ }
+
+  if (!res) {
+    for (const url of directEndpoints) {
+      try {
+        res = await fetch(url, { method: 'POST', body: query, signal: AbortSignal.timeout(10000) })
+        if (res.ok) break
+      } catch { /* try next */ }
+    }
   }
 
   if (!res?.ok) return []
