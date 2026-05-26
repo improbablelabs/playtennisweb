@@ -34,12 +34,15 @@ export async function fetchNearbyCourts(lat, lon, radiusMeters = 16000) {
     console.log('[Overpass] Trying proxy /api/overpass')
     const r = await fetch('/api/overpass', {
       method: 'POST',
-      body: query,
-      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ query }),
+      headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(35000),
     })
     if (r.ok) res = r
-    else console.warn('[Overpass] Proxy returned', r.status)
+    else {
+      const err = await r.json().catch(() => ({}))
+      console.warn('[Overpass] Proxy returned', r.status, err)
+    }
   } catch (err) {
     console.warn('[Overpass] Proxy failed, trying direct:', err.message)
   }
@@ -235,8 +238,8 @@ export async function searchCourtsByName(nameQuery) {
   try {
     const r = await fetch('/api/overpass', {
       method: 'POST',
-      body: query,
-      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ query }),
+      headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(15000),
     })
     if (r.ok) res = r

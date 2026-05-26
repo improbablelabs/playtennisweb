@@ -1,12 +1,12 @@
 /**
  * Vercel serverless proxy for the Overpass API.
- * Accepts JSON { query: "..." } — avoids raw-body stream issues.
+ * Accepts JSON { query: "..." } from the browser.
+ * Forwards to Overpass as form-encoded data= body (the correct format).
  */
 
 const ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ]
 
 export default async function handler(req, res) {
@@ -19,6 +19,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing query in request body' })
   }
 
+  // Overpass expects application/x-www-form-urlencoded with data=<query>
+  const formBody = 'data=' + encodeURIComponent(query)
   const errors = []
 
   for (const url of ENDPOINTS) {
@@ -26,20 +28,22 @@ export default async function handler(req, res) {
       console.log(`[overpass proxy] Trying ${url}`)
       const response = await fetch(url, {
         method: 'POST',
-        body: query,
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        body: formBody,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         signal: AbortSignal.timeout(28000),
       })
       console.log(`[overpass proxy] ${url} → ${response.status}`)
       if (!response.ok) {
-        errors.push(`${url}: HTTP ${response.status}`)
+        const text = await response.text()
+        console.error(`[overpass proxy] Error body: ${text.slice(0, 500)}`)
+        errors.push(`${url}: HTTP ${response.status} — ${text.slice(0, 200)}`)
         continue
       }
       const data = await response.json()
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
       return res.status(200).json(data)
     } catch (err) {
-      console.error(`[overpass proxy] ${url} failed:`, err.message)
+      console.error(`[overpass proxy] ${url} failed: ${err.message}`)
       errors.push(`${url}: ${err.message}`)
     }
   }
