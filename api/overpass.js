@@ -1,10 +1,10 @@
 /**
  * Vercel serverless proxy for the Overpass API.
- * Avoids CORS issues when calling from the browser.
- * POST body: raw Overpass QL query string
+ * Uses Node's built-in https module — works on Node 14/16/18.
  */
+import https from 'https'
+import http from 'http'
 
-// Disable Vercel's body parser so we can read the raw text ourselves
 export const config = {
   api: { bodyParser: false },
 }
@@ -15,6 +15,45 @@ function readRawBody(req) {
     req.on('data', chunk => { data += chunk.toString() })
     req.on('end', () => resolve(data))
     req.on('error', reject)
+  })
+}
+
+function postToUrl(url, body) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url)
+    const lib = parsed.protocol === 'https:' ? https : http
+    const bodyBuf = Buffer.from(body, 'utf8')
+
+    const req = lib.request(
+      {
+        hostname: parsed.hostname,
+        path: parsed.pathname + parsed.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+          'Content-Length': bodyBuf.length,
+        },
+        timeout: 30000,
+      },
+      res => {
+        if (res.statusCode !== 200) {
+          res.resume()
+          return reject(new Error(`HTTP ${res.statusCode}`))
+        }
+        let raw = ''
+        res.setEncoding('utf8')
+        res.on('data', chunk => { raw += chunk })
+        res.on('end', () => {
+          try { resolve(JSON.parse(raw)) }
+          catch (e) { reject(new Error('Invalid JSON from Overpass')) }
+        })
+      }
+    )
+
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')) })
+    req.on('error', reject)
+    req.write(bodyBuf)
+    req.end()
   })
 }
 
@@ -33,21 +72,12 @@ export default async function handler(req, res) {
   let lastError = null
   for (const url of ENDPOINTS) {
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        body,
-        headers: { 'Content-Type': 'text/plain' },
-        signal: AbortSignal.timeout(30000),
-      })
-      if (!response.ok) {
-        lastError = `HTTP ${response.status} from ${url}`
-        continue
-      }
-      const data = await response.json()
+      const data = await postToUrl(url, body)
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
       return res.status(200).json(data)
     } catch (err) {
-      lastError = err.message
+      lastError = `${url}: ${err.message}`
+      console.error('[Overpass proxy] Failed:', lastError)
     }
   }
 
