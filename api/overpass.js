@@ -1,9 +1,7 @@
 /**
  * Vercel serverless proxy for the Overpass API.
- * Uses Node's built-in https module — works on Node 14/16/18.
+ * Node 24 has native fetch — no extra deps needed.
  */
-import https from 'https'
-import http from 'http'
 
 export const config = {
   api: { bodyParser: false },
@@ -18,48 +16,10 @@ function readRawBody(req) {
   })
 }
 
-function postToUrl(url, body) {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url)
-    const lib = parsed.protocol === 'https:' ? https : http
-    const bodyBuf = Buffer.from(body, 'utf8')
-
-    const req = lib.request(
-      {
-        hostname: parsed.hostname,
-        path: parsed.pathname + parsed.search,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain',
-          'Content-Length': bodyBuf.length,
-        },
-        timeout: 30000,
-      },
-      res => {
-        if (res.statusCode !== 200) {
-          res.resume()
-          return reject(new Error(`HTTP ${res.statusCode}`))
-        }
-        let raw = ''
-        res.setEncoding('utf8')
-        res.on('data', chunk => { raw += chunk })
-        res.on('end', () => {
-          try { resolve(JSON.parse(raw)) }
-          catch (e) { reject(new Error('Invalid JSON from Overpass')) }
-        })
-      }
-    )
-
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')) })
-    req.on('error', reject)
-    req.write(bodyBuf)
-    req.end()
-  })
-}
-
 const ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ]
 
 export default async function handler(req, res) {
@@ -67,19 +27,38 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const body = await readRawBody(req)
+  let body
+  try {
+    body = await readRawBody(req)
+  } catch (err) {
+    return res.status(400).json({ error: 'Failed to read request body', detail: err.message })
+  }
 
-  let lastError = null
+  const errors = []
+
   for (const url of ENDPOINTS) {
     try {
-      const data = await postToUrl(url, body)
+      console.log(`[overpass proxy] Trying ${url}`)
+      const response = await fetch(url, {
+        method: 'POST',
+        body,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        signal: AbortSignal.timeout(28000),
+      })
+      console.log(`[overpass proxy] ${url} → ${response.status}`)
+      if (!response.ok) {
+        const text = await response.text()
+        errors.push(`${url}: HTTP ${response.status} — ${text.slice(0, 200)}`)
+        continue
+      }
+      const data = await response.json()
       res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600')
       return res.status(200).json(data)
     } catch (err) {
-      lastError = `${url}: ${err.message}`
-      console.error('[Overpass proxy] Failed:', lastError)
+      console.error(`[overpass proxy] ${url} failed:`, err.message)
+      errors.push(`${url}: ${err.message}`)
     }
   }
 
-  return res.status(502).json({ error: 'Overpass API unavailable', detail: lastError })
+  return res.status(502).json({ error: 'All Overpass endpoints failed', detail: errors })
 }
