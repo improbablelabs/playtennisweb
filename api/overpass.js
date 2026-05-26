@@ -1,20 +1,7 @@
 /**
  * Vercel serverless proxy for the Overpass API.
- * Node 24 has native fetch — no extra deps needed.
+ * Accepts JSON { query: "..." } — avoids raw-body stream issues.
  */
-
-export const config = {
-  api: { bodyParser: false },
-}
-
-function readRawBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = ''
-    req.on('data', chunk => { data += chunk.toString() })
-    req.on('end', () => resolve(data))
-    req.on('error', reject)
-  })
-}
 
 const ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
@@ -27,11 +14,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  let body
-  try {
-    body = await readRawBody(req)
-  } catch (err) {
-    return res.status(400).json({ error: 'Failed to read request body', detail: err.message })
+  const { query } = req.body || {}
+  if (!query) {
+    return res.status(400).json({ error: 'Missing query in request body' })
   }
 
   const errors = []
@@ -41,14 +26,13 @@ export default async function handler(req, res) {
       console.log(`[overpass proxy] Trying ${url}`)
       const response = await fetch(url, {
         method: 'POST',
-        body,
+        body: query,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         signal: AbortSignal.timeout(28000),
       })
       console.log(`[overpass proxy] ${url} → ${response.status}`)
       if (!response.ok) {
-        const text = await response.text()
-        errors.push(`${url}: HTTP ${response.status} — ${text.slice(0, 200)}`)
+        errors.push(`${url}: HTTP ${response.status}`)
         continue
       }
       const data = await response.json()
