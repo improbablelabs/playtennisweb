@@ -3,22 +3,39 @@
  * Avoids CORS issues when calling from the browser.
  * POST body: raw Overpass QL query string
  */
+
+// Disable Vercel's body parser so we can read the raw text ourselves
+export const config = {
+  api: { bodyParser: false },
+}
+
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = ''
+    req.on('data', chunk => { data += chunk.toString() })
+    req.on('end', () => resolve(data))
+    req.on('error', reject)
+  })
+}
+
+const ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+]
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const endpoints = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-  ]
+  const body = await readRawBody(req)
 
   let lastError = null
-  for (const url of endpoints) {
+  for (const url of ENDPOINTS) {
     try {
       const response = await fetch(url, {
         method: 'POST',
-        body: req.body,
+        body,
         headers: { 'Content-Type': 'text/plain' },
         signal: AbortSignal.timeout(30000),
       })
